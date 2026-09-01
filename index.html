@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#111111">
+  <meta name="description" content="GETTO TRANSLATOR - Greek and English voice translator">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="stylesheet" href="/style.css">
+  <title>GETTO TRANSLATOR</title>
+</head>
+<body>
+  <main class="app">
+    <div class="brand">GETTO <span>TRANSLATOR</span></div>
+    <p class="sub">Greek ↔ English • Voice Translator</p>
+
+    <div class="lang">
+      <button id="greekBtn" class="active">🇬🇷 Ελληνικά</button>
+      <div class="swap">↔</div>
+      <button id="englishBtn">🇬🇧 English</button>
+    </div>
+
+    <button id="mic" class="mic" aria-label="Start recording">
+      <span id="micIcon">🎙️</span>
+    </button>
+    <div id="status">Πατήστε το μικρόφωνο και μιλήστε</div>
+
+    <section class="card">
+      <div class="label">ΑΚΟΥΣΤΗΚΕ</div>
+      <div id="original" class="text">—</div>
+    </section>
+
+    <section class="card result">
+      <div class="label">ΜΕΤΑΦΡΑΣΗ</div>
+      <div id="translated" class="text">—</div>
+      <button id="play" class="play" disabled>🔊 Αναπαραγωγή</button>
+    </section>
+
+    <button id="install" class="install" hidden>📲 Εγκατάσταση στο Android</button>
+  </main>
+  <script src="/app.js"></script>
+</body>
+</html>
