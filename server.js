@@ -1,22 +1,37 @@
 import express from "express";
+import path from "path";
+import { fileURLToPath } from "url";
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 10000;
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// ================================
+// MIDDLEWARE
+// ================================
 
 app.use(express.json());
-app.use(express.static(process.cwd()));
+app.use(express.urlencoded({ extended: true }));
 
-// Αρχική σελίδα
+// ================================
+// FRONTEND
+// ================================
+
+app.use(express.static(__dirname));
+
 app.get("/", (req, res) => {
-  res.sendFile(process.cwd() + "/index.html");
+  res.sendFile(path.join(__dirname, "index.html"));
 });
 
 // ================================
-// ΜΕΤΑΦΡΑΣΗ
+// ΔΩΡΕΑΝ ΜΕΤΑΦΡΑΣΗ
 // ================================
+
 app.post("/api/translate", async (req, res) => {
   try {
-    const { text, from, to } = req.body;
+    const { text, from, to } = req.body || {};
 
     if (!text || !text.trim()) {
       return res.status(400).json({
@@ -27,71 +42,34 @@ app.post("/api/translate", async (req, res) => {
     const source = from || "el";
     const target = to || "en";
 
-    // Πρώτη υπηρεσία: MyMemory
-    try {
-      const url =
-        "https://api.mymemory.translated.net/get?q=" +
-        encodeURIComponent(text) +
-        "&langpair=" +
-        encodeURIComponent(source + "|" + target);
+    const url =
+      "https://api.mymemory.translated.net/get?q=" +
+      encodeURIComponent(text) +
+      "&langpair=" +
+      encodeURIComponent(source + "|" + target);
 
-      const response = await fetch(url);
+    const response = await fetch(url);
 
-      if (response.ok) {
-        const data = await response.json();
-
-        if (
-          data &&
-          data.responseData &&
-          data.responseData.translatedText
-        ) {
-          return res.json({
-            original: text,
-            translated: data.responseData.translatedText
-          });
-        }
-      }
-    } catch (error) {
-      console.log("MyMemory failed:", error.message);
+    if (!response.ok) {
+      return res.status(500).json({
+        error: "Δεν ήταν δυνατή η μετάφραση."
+      });
     }
 
-    // Δεύτερη υπηρεσία: Google Translate endpoint
-    try {
-      const googleUrl =
-        "https://translate.googleapis.com/translate_a/single" +
-        "?client=gtx" +
-        "&sl=" +
-        encodeURIComponent(source) +
-        "&tl=" +
-        encodeURIComponent(target) +
-        "&dt=t&q=" +
-        encodeURIComponent(text);
+    const data = await response.json();
 
-      const response = await fetch(googleUrl);
+    const translated =
+      data?.responseData?.translatedText;
 
-      if (response.ok) {
-        const data = await response.json();
-
-        if (Array.isArray(data) && Array.isArray(data[0])) {
-          const translated = data[0]
-            .map(item => item[0])
-            .filter(Boolean)
-            .join("");
-
-          if (translated) {
-            return res.json({
-              original: text,
-              translated: translated
-            });
-          }
-        }
-      }
-    } catch (error) {
-      console.log("Google Translate failed:", error.message);
+    if (!translated) {
+      return res.status(500).json({
+        error: "Δεν επιστράφηκε μετάφραση."
+      });
     }
 
-    return res.status(500).json({
-      error: "Δεν ήταν δυνατή η μετάφραση."
+    return res.json({
+      original: text,
+      translated: translated
     });
 
   } catch (error) {
@@ -107,6 +85,7 @@ app.post("/api/translate", async (req, res) => {
 // ================================
 // SERVER
 // ================================
-app.listen(PORT, () => {
+
+app.listen(PORT, "0.0.0.0", () => {
   console.log(`GETTO Translator running on port ${PORT}`);
 });
