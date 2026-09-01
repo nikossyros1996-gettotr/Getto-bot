@@ -10,7 +10,11 @@ const upload = multer({
 
 const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-app.use(express.static("."));
+app.use(express.static(process.cwd()));
+
+app.get("/", (_req, res) => {
+  res.sendFile("index.html", { root: process.cwd() });
+});
 
 app.post("/api/translate", upload.single("audio"), async (req, res) => {
   try {
