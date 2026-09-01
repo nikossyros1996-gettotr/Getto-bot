@@ -10,12 +10,14 @@ app.get("/", (req, res) => {
   res.sendFile(process.cwd() + "/index.html");
 });
 
-// Δωρεάν μετάφραση
+// ================================
+// ΔΩΡΕΑΝ ΜΕΤΑΦΡΑΣΗ
+// ================================
 app.post("/api/translate", async (req, res) => {
   try {
     const { text, from, to } = req.body;
 
-    if (!text) {
+    if (!text || !text.trim()) {
       return res.status(400).json({
         error: "Δεν δόθηκε κείμενο."
       });
@@ -24,6 +26,7 @@ app.post("/api/translate", async (req, res) => {
     const source = from || "el";
     const target = to || "en";
 
+    // MyMemory - δωρεάν API
     const url =
       "https://api.mymemory.translated.net/get?q=" +
       encodeURIComponent(text) +
@@ -31,28 +34,46 @@ app.post("/api/translate", async (req, res) => {
       encodeURIComponent(source + "|" + target);
 
     const response = await fetch(url);
-    const data = await response.json();
 
-    if (!data.responseData || !data.responseData.translatedText) {
-      return res.status(500).json({
-        error: "Η μετάφραση απέτυχε."
+    if (!response.ok) {
+      return res.status(502).json({
+        error: "Η υπηρεσία μετάφρασης δεν είναι διαθέσιμη.",
+        status: response.status
       });
     }
 
-    res.json({
+    const data = await response.json();
+
+    console.log("Translation API:", JSON.stringify(data));
+
+    if (
+      !data ||
+      !data.responseData ||
+      !data.responseData.translatedText
+    ) {
+      return res.status(500).json({
+        error: "Δεν επιστράφηκε μετάφραση."
+      });
+    }
+
+    return res.json({
       original: text,
       translated: data.responseData.translatedText
     });
 
   } catch (error) {
-    console.error(error);
+    console.error("Translation error:", error);
 
-    res.status(500).json({
-      error: "Σφάλμα μετάφρασης."
+    return res.status(500).json({
+      error: "Σφάλμα μετάφρασης.",
+      details: error.message
     });
   }
 });
 
+// ================================
+// SERVER
+// ================================
 app.listen(PORT, () => {
   console.log(`GETTO Translator running on port ${PORT}`);
 });
