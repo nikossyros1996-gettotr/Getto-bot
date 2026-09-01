@@ -12,7 +12,7 @@ app.get("/", (req, res) => {
 });
 
 // ================================
-// ΔΩΡΕΑΝ ΜΕΤΑΦΡΑΣΗ
+// ΜΕΤΑΦΡΑΣΗ
 // ================================
 app.post("/api/translate", async (req, res) => {
   try {
@@ -27,35 +27,71 @@ app.post("/api/translate", async (req, res) => {
     const source = from || "el";
     const target = to || "en";
 
-    const url =
-      "https://api.mymemory.translated.net/get?q=" +
-      encodeURIComponent(text) +
-      "&langpair=" +
-      encodeURIComponent(source + "|" + target);
+    // Πρώτη υπηρεσία: MyMemory
+    try {
+      const url =
+        "https://api.mymemory.translated.net/get?q=" +
+        encodeURIComponent(text) +
+        "&langpair=" +
+        encodeURIComponent(source + "|" + target);
 
-    const response = await fetch(url);
+      const response = await fetch(url);
 
-    if (!response.ok) {
-      return res.status(500).json({
-        error: "Αποτυχία επικοινωνίας με την υπηρεσία μετάφρασης."
-      });
+      if (response.ok) {
+        const data = await response.json();
+
+        if (
+          data &&
+          data.responseData &&
+          data.responseData.translatedText
+        ) {
+          return res.json({
+            original: text,
+            translated: data.responseData.translatedText
+          });
+        }
+      }
+    } catch (error) {
+      console.log("MyMemory failed:", error.message);
     }
 
-    const data = await response.json();
+    // Δεύτερη υπηρεσία: Google Translate endpoint
+    try {
+      const googleUrl =
+        "https://translate.googleapis.com/translate_a/single" +
+        "?client=gtx" +
+        "&sl=" +
+        encodeURIComponent(source) +
+        "&tl=" +
+        encodeURIComponent(target) +
+        "&dt=t&q=" +
+        encodeURIComponent(text);
 
-    if (
-      !data ||
-      !data.responseData ||
-      !data.responseData.translatedText
-    ) {
-      return res.status(500).json({
-        error: "Δεν επιστράφηκε μετάφραση."
-      });
+      const response = await fetch(googleUrl);
+
+      if (response.ok) {
+        const data = await response.json();
+
+        if (Array.isArray(data) && Array.isArray(data[0])) {
+          const translated = data[0]
+            .map(item => item[0])
+            .filter(Boolean)
+            .join("");
+
+          if (translated) {
+            return res.json({
+              original: text,
+              translated: translated
+            });
+          }
+        }
+      }
+    } catch (error) {
+      console.log("Google Translate failed:", error.message);
     }
 
-    return res.json({
-      original: text,
-      translated: data.responseData.translatedText
+    return res.status(500).json({
+      error: "Δεν ήταν δυνατή η μετάφραση."
     });
 
   } catch (error) {
