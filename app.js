@@ -1,4 +1,4 @@
-let recognition;
+let recognition = null;
 let isRecording = false;
 let lastAudio = null;
 let selected = "el";
@@ -12,9 +12,10 @@ const greekBtn = document.getElementById("greekBtn");
 const englishBtn = document.getElementById("englishBtn");
 const installBtn = document.getElementById("installBtn");
 
-// ===============================
+
+// ================================
 // ΓΛΩΣΣΑ
-// ===============================
+// ================================
 
 greekBtn.onclick = () => setLanguage("el");
 englishBtn.onclick = () => setLanguage("en");
@@ -26,15 +27,16 @@ function setLanguage(lang) {
     englishBtn.classList.toggle("active", lang === "en");
 
     if (lang === "el") {
-        statusEl.textContent = "Μιλήστε Ελληνικά → Αγγλικά";
+        statusEl.textContent = "Μιλήστε Ελληνικά...";
     } else {
-        statusEl.textContent = "Speak English → Greek";
+        statusEl.textContent = "Speak English...";
     }
 }
 
-// ===============================
+
+// ================================
 // ΜΙΚΡΟΦΩΝΟ
-// ===============================
+// ================================
 
 const SpeechRecognition =
     window.SpeechRecognition ||
@@ -46,7 +48,13 @@ if (!SpeechRecognition) {
 }
 
 function startRecognition() {
+
     if (!SpeechRecognition) return;
+
+    if (isRecording) {
+        stopRecognition();
+        return;
+    }
 
     recognition = new SpeechRecognition();
 
@@ -57,6 +65,7 @@ function startRecognition() {
 
     recognition.continuous = false;
     recognition.interimResults = false;
+    recognition.maxAlternatives = 1;
 
     recognition.onstart = () => {
         isRecording = true;
@@ -70,64 +79,103 @@ function startRecognition() {
     };
 
     recognition.onresult = async (event) => {
+
         const text =
             event.results[0][0].transcript.trim();
 
         if (!text) {
-            statusEl.textContent = "Δεν ακούστηκε κείμενο.";
+            statusEl.textContent =
+                "Δεν ακούστηκε κείμενο.";
             return;
         }
 
         originalEl.textContent = text;
 
+        statusEl.textContent = "🔄 Μετάφραση...";
+
         await translateText(text);
     };
 
     recognition.onerror = (event) => {
-        console.error(event.error);
+
+        console.log("Speech error:", event.error);
 
         isRecording = false;
         mic.classList.remove("recording");
 
-        statusEl.textContent =
-            "Σφάλμα μικροφώνου: " + event.error;
+        if (event.error === "not-allowed") {
+            statusEl.textContent =
+                "❌ Επιτρέψτε την πρόσβαση στο μικρόφωνο.";
+        } else if (event.error === "no-speech") {
+            statusEl.textContent =
+                "❌ Δεν ακούστηκε φωνή.";
+        } else {
+            statusEl.textContent =
+                "❌ Παρουσιάστηκε σφάλμα στο μικρόφωνο.";
+        }
     };
 
     recognition.onend = () => {
+
         isRecording = false;
+
         mic.classList.remove("recording");
+
+        if (
+            statusEl.textContent.includes("Ακούω") ||
+            statusEl.textContent.includes("Listening")
+        ) {
+            statusEl.textContent =
+                selected === "el"
+                    ? "Μιλήστε Ελληνικά..."
+                    : "Speak English...";
+        }
     };
 
-    recognition.start();
+    try {
+        recognition.start();
+    } catch (error) {
+        console.log(error);
+    }
 }
 
-mic.onclick = () => {
-    if (isRecording) {
-        if (recognition) {
+
+function stopRecognition() {
+
+    if (recognition) {
+        try {
             recognition.stop();
+        } catch (error) {
+            console.log(error);
         }
-
-        isRecording = false;
-        mic.classList.remove("recording");
-
-        return;
     }
 
-    startRecognition();
-};
+    isRecording = false;
+    mic.classList.remove("recording");
+}
 
-// ===============================
+
+// ================================
+// ΚΟΥΜΠΙ ΜΙΚΡΟΦΩΝΟΥ
+// ================================
+
+mic.addEventListener("click", () => {
+    startRecognition();
+});
+
+
+// ================================
 // ΜΕΤΑΦΡΑΣΗ
-// ===============================
+// ================================
 
 async function translateText(text) {
+
     try {
-        statusEl.textContent = "⏳ Μετάφραση...";
 
         const from = selected;
         const to = selected === "el" ? "en" : "el";
 
-        const response = await fetch("/api/translate", {
+        const response = await fetch("/translate", {
             method: "POST",
 
             headers: {
@@ -136,137 +184,79 @@ async function translateText(text) {
 
             body: JSON.stringify({
                 text: text,
-                from: from,
-                to: to
+                source: from,
+                target: to
             })
         });
 
-        const data = await response.json();
-
         if (!response.ok) {
             throw new Error(
-                data.error || "Η μετάφραση απέτυχε."
+                "Translation server error: " +
+                response.status
             );
         }
 
-        originalEl.textContent =
-            data.original || text;
+        const data = await response.json();
 
-        translatedEl.textContent =
-            data.translated || "—";
+        const translated =
+            data.translation ||
+            data.translatedText ||
+            data.result ||
+            "";
 
-        statusEl.textContent = "Έτοιμο ✅";
+        if (!translated) {
+            throw new Error("Δεν επιστράφηκε μετάφραση.");
+        }
 
-        playSpeech(data.translated);
+        translatedEl.textContent = translated;
+
+        statusEl.textContent =
+            selected === "el"
+                ? "✅ Η μετάφραση ολοκληρώθηκε."
+                : "✅ Translation completed.";
+
+        speakText(translated, to);
 
     } catch (error) {
-        console.error(error);
+
+        console.error("Translation error:", error);
 
         translatedEl.textContent = "—";
 
         statusEl.textContent =
-            "Σφάλμα: " + error.message;
+            "❌ Σφάλμα μετάφρασης.";
     }
 }
 
-// ===============================
-// ΦΩΝΗ
-// ===============================
 
-function playSpeech(text) {
-    if (!text) return;
+// ================================
+// ΑΝΑΠΑΡΑΓΩΓΗ ΜΕΤΑΦΡΑΣΗΣ
+// ================================
+
+function speakText(text, lang) {
+
+    if (!("speechSynthesis" in window)) {
+        return;
+    }
 
     window.speechSynthesis.cancel();
 
-    const speech =
+    const utterance =
         new SpeechSynthesisUtterance(text);
 
-    speech.lang =
-        selected === "el"
-            ? "en-US"
-            : "el-GR";
+    utterance.lang =
+        lang === "el"
+            ? "el-GR"
+            : "en-US";
 
-    speech.rate = 1;
-    speech.pitch = 1;
-    speech.volume = 1;
+    utterance.rate = 0.95;
+    utterance.pitch = 1;
 
-    lastAudio = speech;
+    lastAudio = utterance;
 
-    window.speechSynthesis.speak(speech);
+    window.speechSynthesis.speak(utterance);
 }
 
-playBtn.onclick = () => {
-    if (lastAudio) {
-        window.speechSynthesis.cancel();
 
-        const newSpeech =
-            new SpeechSynthesisUtterance(
-                lastAudio.text
-            );
-
-        newSpeech.lang = lastAudio.lang;
-        newSpeech.rate = 1;
-        newSpeech.pitch = 1;
-        newSpeech.volume = 1;
-
-        window.speechSynthesis.speak(newSpeech);
-    } else if (translatedEl.textContent !== "—") {
-        playSpeech(translatedEl.textContent);
-    }
-};
-
-// ===============================
-// ΕΓΚΑΤΑΣΤΑΣΗ PWA
-// ===============================
-
-let deferredPrompt = null;
-
-window.addEventListener(
-    "beforeinstallprompt",
-    (event) => {
-        event.preventDefault();
-
-        deferredPrompt = event;
-
-        if (installBtn) {
-            installBtn.hidden = false;
-        }
-    }
-);
-
-if (installBtn) {
-    installBtn.onclick = async () => {
-        if (!deferredPrompt) return;
-
-        deferredPrompt.prompt();
-
-        await deferredPrompt.userChoice;
-
-        deferredPrompt = null;
-
-        installBtn.hidden = true;
-    };
-}
-
-// ===============================
-// SERVICE WORKER
-// ===============================
-
-if ("serviceWorker" in navigator) {
-    navigator.serviceWorker.register("/sw.js")
-        .then(() => {
-            console.log("Service Worker ενεργό.");
-        })
-        .catch((error) => {
-            console.error(
-                "Service Worker error:",
-                error
-            );
-        });
-}
-
-// ===============================
-// ΑΡΧΙΚΗ ΓΛΩΣΣΑ
-// ===============================
-
-setLanguage("el");
+// ================================
+// Κ
